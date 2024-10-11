@@ -28,12 +28,22 @@ def contrast_stretching(frames):
         stretched_frames.append(stretched)
     return stretched_frames
 
-def clahe(frames):
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+def clahe(frames, clip_limit=2.0, tile_grid_size=(8, 8)):
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
     return [clahe.apply(frame) for frame in frames]
 
-def median_filter(frames):
-    return [cv2.medianBlur(frame, 5) for frame in frames]
+def median_filter(frames, kernel_size=5):
+    """
+    Apply median filter to each frame with a specified kernel size.
+    
+    Parameters:
+    frames (list): List of frames to be processed.
+    kernel_size (int): Size of the kernel to use for the median filter.
+    
+    Returns:
+    list: List of frames after applying the median filter.
+    """
+    return [cv2.medianBlur(frame, kernel_size) for frame in frames]
 
 def calculate_mse(original, processed):
     return np.mean((original - processed) ** 2)
@@ -56,31 +66,36 @@ def save_frames(frames, folder, prefix):
     if not os.path.exists(folder):
         os.makedirs(folder)
     for i, frame in enumerate(frames):
-        filename = os.path.join(folder, f"{prefix}_frame_{i}.png")
+        filename = os.path.join(folder, f"{prefix}frame{i}.png")
         cv2.imwrite(filename, frame)
 
-def process_video(video_path):
+def process_video(video_path, median_kernel_size=3):
     frames = read_video(video_path)
     gray_frames = convert_to_grayscale(frames)
 
+    # Enhancement Methods
     he_frames = histogram_equalization(gray_frames)
     cs_frames = contrast_stretching(gray_frames)
     clahe_frames = clahe(gray_frames)
 
-    he_filtered = median_filter(he_frames)
-    cs_filtered = median_filter(cs_frames)
-    clahe_filtered = median_filter(clahe_frames)
+    # Apply Median Filter to each enhancement method
+    he_filtered = median_filter(he_frames, kernel_size=median_kernel_size)
+    cs_filtered = median_filter(cs_frames, kernel_size=median_kernel_size)
+    clahe_filtered = median_filter(clahe_frames, kernel_size=median_kernel_size)
 
+    # Evaluate PSNR and MSE for Median Filtered Images
     he_mse, he_psnr = evaluate(gray_frames, he_filtered)
     cs_mse, cs_psnr = evaluate(gray_frames, cs_filtered)
     clahe_mse, clahe_psnr = evaluate(gray_frames, clahe_filtered)
 
+    # Print Results
     print(f'Video: {video_path}')
     print(f'HE - MSE: {he_mse}, PSNR: {he_psnr}')
     print(f'CS - MSE: {cs_mse}, PSNR: {cs_psnr}')
     print(f'CLAHE - MSE: {clahe_mse}, PSNR: {clahe_psnr}')
     print('')
 
+    # Save Frames
     base_folder = os.path.splitext(video_path)[0]
     save_frames(frames, base_folder, "normal")
     save_frames(gray_frames, base_folder, "grayscale")
@@ -88,16 +103,22 @@ def process_video(video_path):
     save_frames(cs_frames, base_folder, "cs")
     save_frames(clahe_frames, base_folder, "clahe")
 
-def process_folder(folder_path):
+    # Save Median Filtered Frames in Separate Folders
+    save_frames(he_filtered, os.path.join(base_folder, 'median_filtered'), "he_filtered")
+    save_frames(cs_filtered, os.path.join(base_folder, 'median_filtered'), "cs_filtered")
+    save_frames(clahe_filtered, os.path.join(base_folder, 'median_filtered'), "clahe_filtered")
+
+def process_folder(folder_path, median_kernel_size=3):
     for filename in os.listdir(folder_path):
         if filename.endswith('.avi'):
             video_path = os.path.join(folder_path, filename)
-            process_video(video_path)
+            process_video(video_path, median_kernel_size=median_kernel_size)
+
 
 # Define the paths to the two folders
 folder_path1 = 'D:\\Kuliah\\Semester 7\\Computer Vision\\UTS_COMVIS\\Video_UTS\\UCF50\\PlayingViolin'
 folder_path2 = 'D:\\Kuliah\\Semester 7\\Computer Vision\\UTS_COMVIS\\Video_UTS\\UCF50\\HorseRace'
 
-# Process each folder
-process_folder(folder_path1)
-process_folder(folder_path2)
+# Process each folder with a specific median kernel size
+process_folder(folder_path1, median_kernel_size=3)
+process_folder(folder_path2, median_kernel_size=3)
